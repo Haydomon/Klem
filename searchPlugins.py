@@ -34,8 +34,8 @@ class serverGeneration(QMainWindow):
         self.setWindowIcon(QtGui.QIcon("tree.png"))
         self.setWindowTitle(self.title)
         self.setGeometry(self.top, self.left, self.width, self.height)
+        self.qboxLayout()
         self.getFolder()
-        serverGeneration.qboxLayout(self)
 
     def qboxLayout(self):
         Widget = QtWidgets.QWidget(self)
@@ -62,113 +62,112 @@ class serverGeneration(QMainWindow):
         self.ResourcesC5 = QtWidgets.QTreeWidgetItem(self.Resources, ['Premium Resources'])
         self.ResourcesC6 = QtWidgets.QTreeWidgetItem(self.Resources, ['Search Resource'])
         self.Gridlayout.addWidget(self.selectClass, 0, 0)
-        self.selectClass.itemClicked.connect(self.onItemClicked)
+        self.selectClass.itemClicked.connect(self.TreeWidgetClicked)
 
         self.returnedItems = QtWidgets.QListWidget()
         self.Gridlayout.addWidget(self.returnedItems, 1, 0)
         self.returnedItems.itemClicked.connect(self.onReturnSelected)
         Widget.setLayout(self.Gridlayout)
-
-    def onItemClicked(self, item):
-        self.SelectedCategory = item.text(0)
-        if "Author" in item.text(0):
-            self.authorName = QLineEdit()
-            self.GridlayoutRightSide.addWidget(self.authorName, 1, 0)
-        self.sortType = QComboBox()
-        self.sortType.addItem("+releaseDate")
-        self.sortType.addItem("-releaseDate")
-        self.GridlayoutRightSide.addWidget(self.sortType, 2, 0)
+    
+    def TreeWidgetClicked(self, item):
         self.searchButton = QPushButton("Search")
         self.GridlayoutRightSide.addWidget(self.searchButton, 0, 0)
-        self.searchButton.clicked.connect(lambda: self.search(item))
+        self.searchButton.clicked.connect(self.search)
+        self.selectedClassItem = item.text(0)
+        if self.selectedClassItem == "Authors List":
+            self.authorName = QLineEdit()
+            self.GridlayoutRightSide.addWidget(self.authorName, 1, 0)
 
-    def search(self, item):
-        self.SelectedCategory = item.text(0)
-        self.NamesIdDict = {}
+    def search(self):
+        self.AuthorNameAndID = {}
         self.returnedItems.clear()
-        if item == False:
-            print("Fail Search")
-        if item.text(0) == "Authors List":
+        if self.selectedClassItem == "Authors List":
             for key in Authors.AuthorSearch(searchtype=self.authorName.text()):
-                self.returnedItems.addItem(key["name"])
-                self.NamesIdDict[key["name"]] = key["id"]
-                
+                self.returnedItems.addItem(key['name'])
+                self.AuthorNameAndID[key["name"]] = key["id"]
+
     def onReturnSelected(self, item):
-        Selected = item.text()
-        self.ResourceIds = {}
+        self.ItemSelected = item.text()
         self.returnedItems.clear()
-        if self.SelectedCategory == "Authors List":
-            self.SelectedCategory = "AuthorsPlugins"
-            for key in Authors.AuthorResources(author=self.NamesIdDict[Selected]):
-                self.returnedItems.addItem(key["name"])
-                print(self.SelectedCategory)
+        if self.selectedClassItem == "Authors List":
+            self.AuthorList()
             return
-            
-        if self.SelectedCategory == "AuthorsPlugins":
-            self.SelectedCategory = "ResourceVersions"
-            for key in Resources.ResourceSearch(query=Selected):
-                if 'resourceID' not in self.ResourceIds:
-                    self.ResourceIds['resourceID'] = {}
-                    self.ResourceInfo = {}
-                    self.ResourceInfo['resourceID'] = {}
-                if key['name'] == Selected:
-                    self.ResourceIds['resourceID'][key['id']] = []
-                print(self.ResourceIds)
 
-        if self.SelectedCategory == "ResourceVersions":
-            if 'resourceID' in self.ResourceIds:
-                for i in self.ResourceIds['resourceID']:
-                    self.SelectedCategory = "ResourceVersionDownload"
-                    for key in Resources.ResourceVersions(resource=i, size=1000, sort=str(self.sortType.currentText())):
-                        if key["resource"] == i:
-                            if key['name'] in self.ResourceInfo['resourceID']:
-                                self.ResourceInfo['resourceID'][key['name']+".0"] = []
-                                self.ResourceInfo['resourceID'][key['name']+".0"].append(key["id"])
-                                self.ResourceInfo['resourceID'][key['name']+".0"].append(key["resource"])
-                                self.ResourceInfo['resourceID'][key['name']+".0"].append(key["releaseDate"])
-                                self.returnedItems.addItem(key["name"]+".0")
-                            else:
-                                self.ResourceInfo['resourceID'][key['name']] = []
-                                self.ResourceInfo['resourceID'][key['name']].append(key["id"])
-                                self.ResourceInfo['resourceID'][key['name']].append(key["resource"])
-                                self.ResourceInfo['resourceID'][key['name']].append(key["releaseDate"])
-                                self.returnedItems.addItem(key["name"])
-                    print(self.ResourceInfo)
-                return
-        if self.SelectedCategory == "ResourceVersionDownload":
-            PATH = 'C:/Users/Haydomon/Documents/chromedriver.exe'
-            url = 'https://spigotmc.org/'
-            options = webdriver.ChromeOptions()
-            options.add_argument("--disable-blink-features=AutomationControlled")
-            driver = webdriver.Chrome(options=options, executable_path=PATH)
-            driver.execute_script(f"window.open('{url}')")
-            driver.close()
-            driver.switch_to.window(driver.window_handles[0])
-            while True:
-                try:
-                    cf_clearance = driver.get_cookie("cf_clearance")["value"]
-                    break
-                except TypeError:
-                    time.sleep(0.1)
-            driver.close()
-            self.SelectedCategory = "GetDownlaod"
+        if self.selectedClassItem == "Resources":
+            self.ResourceSearch()
+            return
 
-        if self.SelectedCategory == "GetDownlaod":
+        if self.selectedClassItem == "ResourceVersions":
             print("Here")
-            headers = {
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36',
-            'cookie': "cf_clearance="+cf_clearance
-            }
-            url = 'https://www.spigotmc.org/resources/'+str(self.ResourceInfo['resourceID'][Selected][1])+'/download?version='+str(self.ResourceInfo['resourceID'][Selected][0])
-            r = requests.get(url, headers=headers)
-            if ".jar" in r.headers['Content-Disposition']:
-                ContentType = '.jar'
-            else:
-                ContentType = '.zip'
-            fileName = self.fileSelected+'/plugins/'+str(self.ResourceInfo['resourceID'][Selected][1])+'.'+str(self.ResourceInfo['resourceID'][Selected][0])+'.'+str(self.ResourceInfo['resourceID'][Selected][2])+ContentType
-            with open(f'{fileName}', 'wb') as f:
-                f.write(r.content)
+            self.ResourceVersions()
+            return
         
+        if self.selectedClassItem == "GetCfClearance":
+            self.GetCfClearance()
+
+    def AuthorList(self):
+        self.ResourceIds = {}
+        self.selectedClassItem = "ResourceVersions"
+        for key in Authors.AuthorResources(author=self.AuthorNameAndID[self.ItemSelected]):
+            self.returnedItems.addItem(key['name'])
+            if key['name'] not in self.ResourceIds:
+                self.ResourceIds[key['name']] = {}
+                self.ResourceIds[key['name']] = [key['id']]
+        print(self.ResourceIds)
+
+    def ResourceSearch(self):
+        for key in Resources.ResourceSearch(query=self.ItemSelected):
+            pass
+    
+    def ResourceVersions(self):
+        self.ResourceInfo = {}
+        self.selectedClassItem = "GetCfClearance"
+        for key in Resources.ResourceVersions(resource=self.ResourceIds[self.ItemSelected][0], size=1000):
+            name = key['name']
+            while name in self.ResourceInfo:
+                name += '.0'
+            self.returnedItems.addItem(name)
+            self.ResourceInfo[name] = [key['id'], key['resource'], key['releaseDate']]
+        print(self.ResourceInfo)
+
+    def GetCfClearance(self):
+        PATH = 'C:/Users/Haydomon/Documents/chromedriver.exe'
+        url = 'https://spigotmc.org/'
+        options = webdriver.ChromeOptions()
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        driver = webdriver.Chrome(options=options, executable_path=PATH)
+        driver.execute_script(f"window.open('{url}')")
+        driver.close()
+        driver.switch_to.window(driver.window_handles[0])
+        while True:
+            try:
+                cf_clearance = driver.get_cookie("cf_clearance")["value"]
+                break
+            except TypeError:
+                time.sleep(0.1)
+        driver.close()
+        self.GetDownload(cf_clearance)
+    
+    def GetDownload(self, cf_clearance):
+        headers = {
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36',
+        'cookie': "cf_clearance="+cf_clearance
+        }
+        url = 'https://www.spigotmc.org/resources/'+str(self.ResourceInfo[self.ItemSelected][1])+'/download?version='+str(self.ResourceInfo[self.ItemSelected][0])
+        r = requests.get(url, headers=headers)
+        try:
+            r.headers['Content-Disposition']
+        except KeyError:
+            print("Returned")
+            return
+        if ".jar" in r.headers['Content-Disposition']:
+            ContentType = '.jar'
+        else:
+            ContentType = '.zip'
+        fileName = self.fileSelected+'/plugins/'+str(self.ResourceInfo[self.ItemSelected][1])+'.'+str(self.ResourceInfo[self.ItemSelected][0])+'.'+str(self.ResourceInfo[self.ItemSelected][2])+ContentType
+        with open(f'{fileName}', 'wb') as f:
+            f.write(r.content)
+
     def getFolder(self):
         with open('selectedFile.json') as r:
             temp = json.load(r)
